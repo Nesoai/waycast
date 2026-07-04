@@ -40,6 +40,7 @@ header{height:58px;display:flex;align-items:center;gap:12px;padding:0 16px;backg
 #app{display:grid;grid-template-rows:1fr;grid-template-columns:420px 1fr;height:calc(100dvh - 58px)}
 #panel{overflow-y:auto;padding:16px 16px 60px;background:var(--panel);border-right:1px solid var(--line);scrollbar-width:thin}
 #map{height:100%;z-index:1;background:#dfe8ee}
+#mapwrap{height:100%}
 @media(max-width:860px){
   #app{grid-template-columns:1fr;grid-template-rows:38vh 1fr}
   #map{order:-1}
@@ -195,6 +196,9 @@ header{height:58px;display:flex;align-items:center;gap:12px;padding:0 16px;backg
       <div class="verdict" id="verdict"></div>
       <div class="statrow" id="stats"></div>
 
+      <div class="secl">Dress &amp; prep</div>
+      <div class="softcard" id="prepCard"></div>
+
       <div class="secl">Best time to leave</div>
       <div class="leaverow" id="leaveRow"></div>
 
@@ -204,12 +208,16 @@ header{height:58px;display:flex;align-items:center;gap:12px;padding:0 16px;backg
       <div class="secl">Daylight</div>
       <div class="softcard" id="sunCard"></div>
 
+      <div class="secl">Fuel</div>
+      <div class="softcard" id="fuelCard"></div>
+
       <div class="saveline">
         <input class="tin" id="saveName" placeholder="Name this route (e.g. Work run)">
         <button class="smallbtn" id="saveBtn">💾 Save</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="smallbtn" id="printBtn" style="flex:1">🖨 Print / export trip sheet <span id="printLock">🔒</span></button>
+        <button class="smallbtn" id="shareBtn" style="flex:1">🔗 Share this trip</button>
+        <button class="smallbtn" id="printBtn" style="flex:1">🖨 Trip sheet <span id="printLock">🔒</span></button>
       </div>
 
       <div class="secl">At your destination</div>
@@ -223,10 +231,12 @@ header{height:58px;display:flex;align-items:center;gap:12px;padding:0 16px;backg
       </div>
     </div>
 
-    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.0<br>
+    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.1<br>
     Forecasts are estimates — always drive to conditions. Map © OpenStreetMap contributors · routing OSRM · weather Open-Meteo.</div>
   </div>
-  <div id="map"></div>
+  <div id="mapwrap" style="position:relative;min-height:0"><div id="map"></div>
+    <button class="pill" id="radarBtn" style="position:absolute;top:12px;right:12px;z-index:1000;background:rgba(12,18,32,.92)">🌧 Radar</button>
+  </div>
 </div>
 
 <div id="modal"><div id="mcard">
@@ -245,7 +255,7 @@ const AFF_LABEL = "🏨 Find a place to stay near {CITY} →";
 /* ================= ENGINE ================= */
 const $=id=>document.getElementById(id);
 const KEY='waycast.v1';
-let S=Object.assign({units:'F',tomtom:'',pro:false,saved:[]},(()=>{try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}})());
+let S=Object.assign({units:'F',tomtom:'',pro:false,saved:[],mpg:27,l100:8.5,gas:null},(()=>{try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}})());
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function toast(t){const x=$('toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2600)}
 function err(t){const e=$('errBox');if(!t){e.style.display='none';return}e.textContent=t;e.style.display='block'}
@@ -254,8 +264,23 @@ function err(t){const e=$('errBox');if(!t){e.style.display='none';return}e.textC
 const cf=c=>S.units==='F'?Math.round(c*9/5+32):Math.round(c);
 const spd=k=>S.units==='F'?Math.round(k*0.621)+' mph':Math.round(k)+' km/h';
 const dist=m=>S.units==='F'?(m/1609.34).toFixed(m<16093?1:0)+' mi':(m/1000).toFixed(m<16000?1:0)+' km';
-$('unitBtn').textContent='°'+S.units;
-$('unitBtn').onclick=()=>{S.units=S.units==='F'?'C':'F';save();$('unitBtn').textContent='°'+S.units;if(LAST)renderAll();};
+let HERE=null;
+function updateUnitBtn(){
+  $('unitBtn').title='Tap to switch °F / °C';
+  $('unitBtn').textContent = HERE ? wc(HERE.code)[0]+' '+cf(HERE.temp)+'°'+S.units : '°'+S.units;
+}
+updateUnitBtn();
+$('unitBtn').onclick=()=>{S.units=S.units==='F'?'C':'F';save();updateUnitBtn();if(LAST)renderAll();};
+async function loadHereWx(){
+  try{
+    const pos=await new Promise((res,rej)=>{
+      if(!navigator.geolocation)return rej();
+      navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lon:p.coords.longitude}),()=>rej(),{timeout:6000,maximumAge:600000});
+    }).catch(async()=>{ const j=await jget('https://ipapi.co/json/',6000); return {lat:j.latitude,lon:j.longitude}; });
+    const j=await jget('https://api.open-meteo.com/v1/forecast?latitude='+pos.lat.toFixed(3)+'&longitude='+pos.lon.toFixed(3)+'&current_weather=true');
+    if(j.current_weather){ HERE={temp:j.current_weather.temperature,code:j.current_weather.weathercode}; updateUnitBtn(); }
+  }catch(e){}
+}
 
 /* ---- weather codes ---- */
 const WC={0:['☀️','Clear'],1:['🌤','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Overcast'],45:['🌫','Fog'],48:['🌫','Freezing fog'],51:['🌦','Light drizzle'],53:['🌦','Drizzle'],55:['🌧','Heavy drizzle'],56:['🧊','Freezing drizzle'],57:['🧊','Freezing drizzle'],61:['🌦','Light rain'],63:['🌧','Rain'],65:['🌧','Heavy rain'],66:['🧊','Freezing rain'],67:['🧊','Freezing rain'],71:['🌨','Light snow'],73:['❄️','Snow'],75:['❄️','Heavy snow'],77:['❄️','Snow grains'],80:['🌦','Showers'],81:['🌧','Showers'],82:['⛈','Heavy showers'],85:['🌨','Snow showers'],86:['❄️','Snow showers'],95:['⛈','Thunderstorm'],96:['⛈','Storm + hail'],99:['⛈','Storm + hail']};
@@ -384,7 +409,7 @@ async function cast(){
   const g=$('goBtn');g.disabled=true;g.innerHTML='<span class="spin"></span> Casting…';
   try{
     const from=$('fromIn').dataset.lat?{lat:+$('fromIn').dataset.lat,lon:+$('fromIn').dataset.lon,label:'My location'}:await geocode(fq);
-    const to=await geocode(tq);
+    const to=$('toIn').dataset.lat?{lat:+$('toIn').dataset.lat,lon:+$('toIn').dataset.lon,label:tq}:await geocode(tq);
     let mids=[];
     if(MODE==='trip'&&S.pro){for(const s of STOPS){if(s.q&&s.q.trim())mids.push(await geocode(s.q));}}
     const pts=[from,...mids,to];
@@ -440,6 +465,8 @@ function renderAll(){
   renderLeaveChips();
   renderTimeline(sts,dep,d);
   renderSun(arr);
+  renderPrep(sts,arr);
+  renderFuel();
   const city=LAST.to.label.split(',')[0];
   $('affcard').innerHTML=`<h3>Arriving in ${city} around ${fmtT(arr)}</h3><p>${wc(sts[sts.length-1].r.code)[1]}, ${cf(sts[sts.length-1].r.temp)}°${S.units} on arrival.</p><a class="aff" target="_blank" rel="noopener" href="${AFF_STAY.replace('{CITY}',encodeURIComponent(city))}">${AFF_LABEL.replace('{CITY}',city)}</a>`;
   proUI();
@@ -520,6 +547,108 @@ function renderSun(arr){
     else html+=`<p>You'll arrive with ${Math.floor(mins/60)?Math.floor(mins/60)+'h ':''}${mins%60}m of daylight to spare.</p>`;
   }else html='<h3>🌤 Daylight</h3><p>Sun times unavailable for that date.</p>';
   $('sunCard').innerHTML=html;
+}
+
+function renderPrep(sts,arr){
+  const o=sts[0], d=sts[sts.length-1];
+  const oc=o.r.temp, dc=d.r.temp, minC=Math.min(oc,dc);
+  const chips=[];
+  if(minC<=0){chips.push('🧥 Heavy coat, gloves & hat');chips.push('🧊 De-ice time + watch for black ice');}
+  else if(minC<=10)chips.push('🧥 Warm jacket');
+  else if(minC<=18)chips.push('👕 Light layers');
+  else if(minC>=30){chips.push('🧢 Light clothes & sunscreen');chips.push('💧 Water for the ride');}
+  const deltaC=dc-oc;
+  if(Math.abs(deltaC)>=5){
+    const du=S.units==='F'?Math.round(Math.abs(deltaC)*9/5):Math.round(Math.abs(deltaC));
+    chips.push('🌡 '+du+'° '+(deltaC>0?'warmer':'cooler')+' when you arrive — pack a layer');
+  }
+  const anyRain=sts.some(x=>x.r.p>=40&&x.r.code>=51&&!isSnowy(x.r.code));
+  const anySnow=sts.some(x=>isSnowy(x.r.code)||x.r.snow>0);
+  const anyStorm=sts.some(x=>isStormy(x.r.code));
+  const anyFog=sts.some(x=>isFoggy(x.r.code));
+  if(anyRain)chips.push('☂️ Umbrella / rain jacket');
+  if(anySnow)chips.push('🧣 Scraper, blanket & washer fluid in the car');
+  if(anyStorm)chips.push('⛈ Storms possible — the Best-Time row may find a drier window');
+  if(anyFog)chips.push('🌫 Fog en route — low beams, extra following distance');
+  if(sts.some(x=>x.r.wind>=45))chips.push('💨 Gusty — two hands on open stretches');
+  if(!chips.length)chips.push('😌 Easy conditions — dress for '+cf(minC)+'° and enjoy the drive');
+  $('prepCard').innerHTML=
+    '<h3>'+wc(o.r.code)[0]+' '+cf(oc)+'°'+S.units+' leaving '+(LAST.from.label.split(',')[0])+
+    ' → '+wc(d.r.code)[0]+' '+cf(dc)+'°'+S.units+' arriving '+(LAST.to.label.split(',')[0])+'</h3>'+
+    '<div style="margin-top:8px">'+chips.map(c=>'<span class="flag f-info" style="margin-top:6px">'+c+'</span>').join(' ')+'</div>';
+}
+
+function renderFuel(){
+  const usF=S.units==='F';
+  if(S.gas==null)S.gas=usF?3.15:1.65;
+  const miles=LAST.route.distance/1609.34, km=LAST.route.distance/1000;
+  const amount=usF? miles/(S.mpg||27) : km*(S.l100||8.5)/100;
+  const cost=amount*S.gas;
+  const unitA=usF?'gal':'L', unitB=usF?'mpg':'L/100km', effVal=usF?(S.mpg||27):(S.l100||8.5);
+  const city=LAST.to.label.split(',')[0];
+  $('fuelCard').innerHTML=
+    '<h3>⛽ ≈ $'+cost.toFixed(2)+' in fuel <span style="color:var(--dim);font-weight:500;font-size:13px">('+amount.toFixed(1)+' '+unitA+')</span></h3>'+
+    '<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--dim)">'+
+    'Your car: <input class="tin" id="effIn" type="number" step="0.5" value="'+effVal+'" style="width:76px;padding:7px 9px;font-size:13px"> '+unitB+
+    ' · Gas: $<input class="tin" id="gasIn" type="number" step="0.05" value="'+S.gas+'" style="width:76px;padding:7px 9px;font-size:13px"> /'+unitA+'</div>'+
+    '<a class="aff" target="_blank" rel="noopener" href="https://www.gasbuddy.com/home?search='+encodeURIComponent(city)+'">⛽ Find the cheapest gas near '+city+' →</a>';
+  $('effIn').oninput=()=>{ const v=parseFloat($('effIn').value); if(v>0){ if(usF)S.mpg=v; else S.l100=v; save(); renderFuel(); } };
+  $('gasIn').oninput=()=>{ const v=parseFloat($('gasIn').value); if(v>0){ S.gas=v; save(); renderFuel(); } };
+}
+
+/* ---- RainViewer radar overlay ---- */
+let RD={on:false,frames:[],layers:[],i:0,timer:null};
+$('radarBtn').onclick=async()=>{
+  if(!MAP)return;
+  if(RD.on){ radarOff(); return; }
+  try{
+    $('radarBtn').textContent='🌧 …';
+    if(!RD.frames.length){
+      const j=await jget('https://api.rainviewer.com/public/weather-maps.json');
+      RD.frames=[...(j.radar.past||[]).slice(-5),...(j.radar.nowcast||[])].slice(0,9);
+    }
+    if(!RD.frames.length)throw new Error();
+    RD.layers=RD.frames.map(f=>L.tileLayer('https://tilecache.rainviewer.com'+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,zIndex:8}).addTo(MAP));
+    RD.on=true; RD.i=0;
+    const step=()=>{
+      RD.layers.forEach((l,k)=>l.setOpacity(k===RD.i?0.65:0));
+      const t=new Date(RD.frames[RD.i].time*1000);
+      $('radarBtn').textContent='🌧 '+t.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+' ✕';
+      RD.i=(RD.i+1)%RD.layers.length;
+    };
+    step(); RD.timer=setInterval(step,700);
+  }catch(e){ $('radarBtn').textContent='🌧 Radar'; toast('Radar unavailable right now'); }
+};
+function radarOff(){
+  if(RD.timer)clearInterval(RD.timer); RD.timer=null;
+  RD.layers.forEach(l=>{try{MAP.removeLayer(l)}catch(e){}}); RD.layers=[];
+  RD.on=false; $('radarBtn').textContent='🌧 Radar';
+}
+
+/* ---- share a trip ---- */
+function b64e(o){return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function b64d(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return JSON.parse(decodeURIComponent(escape(atob(s))));}
+$('shareBtn').onclick=async()=>{
+  if(!LAST)return;
+  const p={f:[+LAST.from.lat.toFixed(5),+LAST.from.lon.toFixed(5),LAST.from.label],
+           t:[+LAST.to.lat.toFixed(5),+LAST.to.lon.toFixed(5),LAST.to.label],
+           w:$('whenIn').value};
+  const url=location.origin+location.pathname+'#t='+b64e(p);
+  try{
+    if(navigator.share){ await navigator.share({title:'WayCast trip',text:'Our route + weather along the way',url}); }
+    else{ await navigator.clipboard.writeText(url); toast('🔗 Link copied — send it to your crew'); }
+  }catch(e){ try{await navigator.clipboard.writeText(url);toast('🔗 Link copied');}catch(_){toast(url);} }
+};
+function loadShared(){
+  if(!location.hash.startsWith('#t='))return;
+  try{
+    const p=b64d(location.hash.slice(3));
+    $('fromIn').value=p.f[2]; $('fromIn').dataset.lat=p.f[0]; $('fromIn').dataset.lon=p.f[1];
+    $('toIn').value=p.t[2];   $('toIn').dataset.lat=p.t[0];   $('toIn').dataset.lon=p.t[1];
+    if(p.w)$('whenIn').value=p.w;
+    toast('Loaded a shared trip — casting…');
+    setTimeout(cast,400);
+  }catch(e){}
 }
 
 /* ---- map ---- */
@@ -607,7 +736,7 @@ $('setBtn').onclick=()=>{
     <p style="margin-top:2px">Optional: a free TomTom developer key adds true live-traffic drive times. Without it, WayCast models typical rush-hour patterns.</p>
     <div class="setrow">Pro status <span style="margin-left:auto;color:${S.pro?'var(--ok)':'var(--faint)'};font-weight:700">${S.pro?'✓ Active':'Not active'}</span></div>
     <button class="lockbtn" id="ttSave" style="background:var(--a1);color:#04211d">Save settings</button>
-    <div class="brandfoot">WayCast v1.0 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
+    <div class="brandfoot">WayCast v1.1 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
   $('uF').onclick=()=>{S.units='F';$('uF').classList.add('on');$('uC').classList.remove('on');};
   $('uC').onclick=()=>{S.units='C';$('uC').classList.add('on');$('uF').classList.remove('on');};
   $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
@@ -615,7 +744,8 @@ $('setBtn').onclick=()=>{
 
 /* ---- boot ---- */
 $('fromIn').addEventListener('input',()=>{delete $('fromIn').dataset.lat;delete $('fromIn').dataset.lon;});
-renderSaved();proUI();setMode('commute');
+$('toIn').addEventListener('input',()=>{delete $('toIn').dataset.lat;delete $('toIn').dataset.lon;});
+renderSaved();proUI();setMode('commute');loadHereWx();loadShared();
 setTimeout(()=>{ if(!MAP){MAP=L.map('map').setView([39.5,-96],4);L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(MAP);} },50);
 
 </script>
