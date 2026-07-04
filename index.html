@@ -155,6 +155,10 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
 .brandfoot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--faint)}
 #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(80px);background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:11px 20px;font-size:13.5px;font-weight:600;z-index:90;transition:transform .25s;box-shadow:0 10px 30px rgba(0,0,0,.4)}
 #toast.on{transform:translateX(-50%) translateY(0)}
+.youdot{position:relative;width:18px;height:18px}
+.youdot i{position:absolute;inset:3px;border-radius:50%;background:#2dd4bf;border:2.5px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.4)}
+.youdot:before{content:"";position:absolute;inset:-6px;border-radius:50%;background:rgba(45,212,191,.35);animation:youping 2s ease-out infinite}
+@keyframes youping{0%{transform:scale(.5);opacity:.9}80%,100%{transform:scale(1.6);opacity:0}}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media print{
@@ -245,7 +249,7 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
       </div>
     </div>
 
-    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.3<br>
+    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.4<br>
     Forecasts are estimates — always drive to conditions. Map © OpenStreetMap contributors · routing OSRM · weather Open-Meteo.</div>
   </div>
   <div id="dragbar" title="Drag to resize"><i></i></div>
@@ -281,7 +285,7 @@ function err(t){const e=$('errBox');if(!t){e.style.display='none';return}e.textC
 const cf=c=>S.units==='F'?Math.round(c*9/5+32):Math.round(c);
 const spd=k=>S.units==='F'?Math.round(k*0.621)+' mph':Math.round(k)+' km/h';
 const dist=m=>S.units==='F'?(m/1609.34).toFixed(m<16093?1:0)+' mi':(m/1000).toFixed(m<16000?1:0)+' km';
-let HERE=null;
+let HERE=null, HEREPOS=null, HEREMARK=null;
 function updateUnitBtn(){
   $('unitBtn').title='Tap to switch °F / °C';
   $('unitBtn').textContent = HERE ? wc(HERE.code)[0]+' '+cf(HERE.temp)+'°'+S.units : '°'+S.units;
@@ -294,9 +298,16 @@ async function loadHereWx(){
       if(!navigator.geolocation)return rej();
       navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lon:p.coords.longitude}),()=>rej(),{timeout:6000,maximumAge:600000});
     }).catch(async()=>{ const j=await jget('https://ipapi.co/json/',6000); return {lat:j.latitude,lon:j.longitude}; });
+    HEREPOS=pos; centerHome();
     const j=await jget('https://api.open-meteo.com/v1/forecast?latitude='+pos.lat.toFixed(3)+'&longitude='+pos.lon.toFixed(3)+'&current_weather=true');
     if(j.current_weather){ HERE={temp:j.current_weather.temperature,code:j.current_weather.weathercode}; updateUnitBtn(); }
   }catch(e){}
+}
+function centerHome(){
+  if(typeof L==='undefined'||!MAP||!HEREPOS||LAST)return;
+  MAP.setView([HEREPOS.lat,HEREPOS.lon],10);
+  if(HEREMARK)MAP.removeLayer(HEREMARK);
+  HEREMARK=L.marker([HEREPOS.lat,HEREPOS.lon],{icon:L.divIcon({className:'',html:'<div class="youdot"><i></i></div>',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(MAP).bindTooltip('You are here',{direction:'top'});
 }
 
 /* ---- weather codes ---- */
@@ -492,7 +503,8 @@ function renderAll(){
 
 function renderLeaveChips(){
   const offs=[-30,-15,0,15,30,45,60,90,120];
-  const rows=offs.map(o=>{
+  const now=Date.now()-60000; // 1-min grace
+  let rows=offs.filter(o=>LAST.dep.getTime()+o*60000>=now).map(o=>{
     const dep=new Date(LAST.dep.getTime()+o*60000);
     const d=adjDuration(dep);
     const sts=stopsAt(dep);
@@ -502,10 +514,12 @@ function renderLeaveChips(){
     const score=maxP+(snow?35:0)+(storm?45:0)+((d.live?0:(d.factor-1)*160));
     return{o,dep,arr:new Date(dep.getTime()+d.secs*1000),maxP,score};
   });
-  const best=rows.reduce((a,b)=>b.score<a.score-3?b:a,rows.find(r=>r.o===0));
+  if(!rows.length)rows=[{o:0,dep:LAST.dep,arr:new Date(LAST.dep.getTime()+adjDuration(LAST.dep).secs*1000),maxP:0,score:0}];
+  const anchor=rows.find(r=>r.o===0)||rows[0];
+  const best=rows.reduce((a,b)=>b.score<a.score-3?b:a,anchor);
   $('leaveRow').innerHTML=rows.map(r=>`
     <div class="leavechip ${r.o===0?'on':''} ${r===best?'best':''}" data-o="${r.o}">
-      <div class="lt">${r.o===0?'Now planned':fmtT(r.dep)}</div>
+      <div class="lt">${r.o===0?'As planned':fmtT(r.dep)}</div>
       <div class="lr">arr ${fmtT(r.arr)} · 💧${r.maxP}%</div>
       ${r===best?'<span class="bestpill">✦ BEST WINDOW</span>':''}
     </div>`).join('');
@@ -673,6 +687,7 @@ function loadShared(){
 function drawMap(){
   if(typeof L==='undefined'){return;}
   if(!MAP){MAP=L.map('map',{zoomControl:true});BASE=baseTiles().addTo(MAP);}
+  if(HEREMARK){try{MAP.removeLayer(HEREMARK)}catch(e){} HEREMARK=null;}
   if(LAYER)LAYER.remove();
   LAYER=L.layerGroup().addTo(MAP);
   const line=LAST.route.geometry.coordinates.map(c=>[c[1],c[0]]);
@@ -757,7 +772,7 @@ $('setBtn').onclick=()=>{
     <p style="margin-top:2px">Optional: a free TomTom developer key adds true live-traffic drive times. Without it, WayCast models typical rush-hour patterns.</p>
     <div class="setrow">Pro status <span style="margin-left:auto;color:${S.pro?'var(--ok)':'var(--faint)'};font-weight:700">${S.pro?'✓ Active':'Not active'}</span></div>
     <button class="lockbtn" id="ttSave" style="background:var(--a1);color:#04211d">Save settings</button>
-    <div class="brandfoot">WayCast v1.3 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
+    <div class="brandfoot">WayCast v1.4 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
   $('uF').onclick=()=>{S.units='F';$('uF').classList.add('on');$('uC').classList.remove('on');};
   $('uC').onclick=()=>{S.units='C';$('uC').classList.add('on');$('uF').classList.remove('on');};
   $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();S.tmkey=$('tmIn').value.trim();S.name=$('nameIn2').value.trim();greet();renderLog();setTrafficLayer(false);save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
@@ -774,6 +789,7 @@ setTimeout(()=>{
     return;
   }
   if(!MAP){MAP=L.map('map').setView([39.5,-96],4);BASE=baseTiles().addTo(MAP);}
+  centerHome();
 },50);
 const BASES={
   light:['Light','https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:20}],
