@@ -39,16 +39,21 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
 .pill.prodone{background:rgba(52,211,153,.15);color:var(--ok);border-color:rgba(52,211,153,.4)}
 
 /* layout */
-#app{display:grid;grid-template-rows:1fr;grid-template-columns:420px 1fr;height:calc(100dvh - 58px)}
+#app{display:grid;grid-template-rows:1fr;grid-template-columns:var(--pw,420px) 10px 1fr;height:calc(100dvh - 58px)}
+#dragbar{background:var(--panel);border-left:1px solid var(--line);border-right:1px solid var(--line);cursor:col-resize;display:grid;place-items:center;touch-action:none;user-select:none}
+#dragbar i{width:3px;height:44px;border-radius:3px;background:#2b3d63}
+#dragbar:hover i{background:var(--a1)}
 #panel{overflow-y:auto;padding:16px 16px 60px;background:var(--panel);border-right:1px solid var(--line);scrollbar-width:thin;scrollbar-color:#22345a transparent}
 #panel::-webkit-scrollbar{width:8px}
 #panel::-webkit-scrollbar-thumb{background:#22345a;border-radius:8px}
 #map{height:100%;z-index:1;background:#dfe8ee}
 #mapwrap{height:100%}
 @media(max-width:860px){
-  #app{grid-template-columns:1fr;grid-template-rows:38vh 1fr}
-  #map{order:-1}
-  #panel{border-right:none;border-top:1px solid var(--line)}
+  #app{grid-template-columns:1fr;grid-template-rows:var(--mh,38vh) 10px 1fr}
+  #mapwrap{order:-2}
+  #dragbar{order:-1;cursor:row-resize;border:none;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  #dragbar i{width:44px;height:3px}
+  #panel{border-right:none}
 }
 
 /* inputs */
@@ -171,6 +176,7 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
 
 <div id="app">
   <div id="panel">
+    <div id="logStats" style="font-size:12px;color:var(--faint);margin-bottom:6px"></div>
     <div class="savedrow" id="savedRow"></div>
 
     <div style="display:flex;gap:8px;margin-bottom:14px">
@@ -188,8 +194,8 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
     </div>
     <div class="frow"><label>Leave at</label>
       <div style="display:flex;gap:8px">
+        <button class="smallbtn" id="nowBtn" style="padding:0 20px">Now</button>
         <input class="tin" type="datetime-local" id="whenIn" style="flex:1">
-        <button class="smallbtn" id="nowBtn">Now</button>
       </div>
     </div>
     <button id="goBtn">Cast my route →</button>
@@ -220,12 +226,16 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
         <button class="smallbtn" id="saveBtn">💾 Save</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="smallbtn" id="shareBtn" style="flex:1">🔗 Share this trip</button>
+        <button class="smallbtn" id="logBtn" style="flex:1">📓 Log drive</button>
+        <button class="smallbtn" id="shareBtn" style="flex:1">🔗 Share</button>
         <button class="smallbtn" id="printBtn" style="flex:1">🖨 Trip sheet <span id="printLock">🔒</span></button>
       </div>
 
       <div class="secl">At your destination</div>
       <div class="softcard" id="affcard"></div>
+
+      <div class="secl">Near your destination</div>
+      <div class="softcard" id="localCard"></div>
 
       <div class="secl" id="upsellLbl">WayCast Pro</div>
       <div class="locknote" id="upsell">
@@ -235,11 +245,14 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
       </div>
     </div>
 
-    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.2<br>
+    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.3<br>
     Forecasts are estimates — always drive to conditions. Map © OpenStreetMap contributors · routing OSRM · weather Open-Meteo.</div>
   </div>
+  <div id="dragbar" title="Drag to resize"><i></i></div>
   <div id="mapwrap" style="position:relative;min-height:0"><div id="map"></div>
     <button class="pill" id="radarBtn" style="position:absolute;top:12px;right:12px;z-index:1000;background:rgba(13,21,38,.92);backdrop-filter:blur(6px)">🌧 Radar</button>
+    <button class="pill" id="layersBtn" style="position:absolute;top:54px;right:12px;z-index:1000;background:rgba(13,21,38,.92);backdrop-filter:blur(6px)">🗺 Layers</button>
+    <div id="layersPop" style="display:none;position:absolute;top:96px;right:12px;z-index:1000;background:rgba(13,21,38,.96);border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-width:180px;backdrop-filter:blur(8px)"></div>
   </div>
 </div>
 
@@ -259,7 +272,7 @@ const AFF_LABEL = "🏨 Find a place to stay near {CITY} →";
 /* ================= ENGINE ================= */
 const $=id=>document.getElementById(id);
 const KEY='waycast.v1';
-let S=Object.assign({units:'F',tomtom:'',pro:false,saved:[],mpg:27,l100:8.5,gas:null},(()=>{try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}})());
+let S=Object.assign({units:'F',tomtom:'',tmkey:'',pro:false,saved:[],mpg:27,l100:8.5,gas:null,pw:420,mh:38,base:'light',name:'',log:[]},(()=>{try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return{}}})());
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function toast(t){const x=$('toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2600)}
 function err(t){const e=$('errBox');if(!t){e.style.display='none';return}e.textContent=t;e.style.display='block'}
@@ -471,6 +484,7 @@ function renderAll(){
   renderSun(arr);
   renderPrep(sts,arr);
   renderFuel();
+  renderLocal();
   const city=LAST.to.label.split(',')[0];
   $('affcard').innerHTML=`<h3>Arriving in ${city} around ${fmtT(arr)}</h3><p>${wc(sts[sts.length-1].r.code)[1]}, ${cf(sts[sts.length-1].r.temp)}°${S.units} on arrival.</p><a class="aff" target="_blank" rel="noopener" href="${AFF_STAY.replace('{CITY}',encodeURIComponent(city))}">${AFF_LABEL.replace('{CITY}',city)}</a>`;
   proUI();
@@ -612,7 +626,7 @@ $('radarBtn').onclick=async()=>{
       RD.frames=[...(j.radar.past||[]).slice(-5),...(j.radar.nowcast||[])].slice(0,9);
     }
     if(!RD.frames.length)throw new Error();
-    RD.layers=RD.frames.map(f=>L.tileLayer('https://tilecache.rainviewer.com'+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,zIndex:8}).addTo(MAP));
+    RD.layers=RD.frames.map(f=>L.tileLayer('https://tilecache.rainviewer.com'+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,zIndex:8,maxNativeZoom:9,maxZoom:20}).addTo(MAP));
     RD.on=true; RD.i=0;
     const step=()=>{
       RD.layers.forEach((l,k)=>l.setOpacity(k===RD.i?0.65:0));
@@ -658,7 +672,7 @@ function loadShared(){
 /* ---- map ---- */
 function drawMap(){
   if(typeof L==='undefined'){return;}
-  if(!MAP){MAP=L.map('map',{zoomControl:true});baseTiles().addTo(MAP);}
+  if(!MAP){MAP=L.map('map',{zoomControl:true});BASE=baseTiles().addTo(MAP);}
   if(LAYER)LAYER.remove();
   LAYER=L.layerGroup().addTo(MAP);
   const line=LAST.route.geometry.coordinates.map(c=>[c[1],c[0]]);
@@ -737,29 +751,135 @@ $('modal').onclick=e=>{if(e.target.id==='modal')closeModal();};
 $('setBtn').onclick=()=>{
   openModal('Settings',`
     <div class="setrow">Units <div class="seg"><button id="uF" class="${S.units==='F'?'on':''}">°F mi</button><button id="uC" class="${S.units==='C'?'on':''}">°C km</button></div></div>
+    <div class="setrow">Your name <input class="tin" id="nameIn2" placeholder="for greetings" value="${S.name||''}"></div>
     <div class="setrow">Live traffic key <input class="tin" id="ttIn" placeholder="TomTom API key" value="${S.tomtom||''}"></div>
+    <div class="setrow">Events key <input class="tin" id="tmIn" placeholder="Ticketmaster API key" value="${S.tmkey||''}"></div>
     <p style="margin-top:2px">Optional: a free TomTom developer key adds true live-traffic drive times. Without it, WayCast models typical rush-hour patterns.</p>
     <div class="setrow">Pro status <span style="margin-left:auto;color:${S.pro?'var(--ok)':'var(--faint)'};font-weight:700">${S.pro?'✓ Active':'Not active'}</span></div>
     <button class="lockbtn" id="ttSave" style="background:var(--a1);color:#04211d">Save settings</button>
-    <div class="brandfoot">WayCast v1.2 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
+    <div class="brandfoot">WayCast v1.3 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
   $('uF').onclick=()=>{S.units='F';$('uF').classList.add('on');$('uC').classList.remove('on');};
   $('uC').onclick=()=>{S.units='C';$('uC').classList.add('on');$('uF').classList.remove('on');};
-  $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
+  $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();S.tmkey=$('tmIn').value.trim();S.name=$('nameIn2').value.trim();greet();renderLog();setTrafficLayer(false);save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
 };
 
 /* ---- boot ---- */
 $('fromIn').addEventListener('input',()=>{delete $('fromIn').dataset.lat;delete $('fromIn').dataset.lon;});
 $('toIn').addEventListener('input',()=>{delete $('toIn').dataset.lat;delete $('toIn').dataset.lon;});
-renderSaved();proUI();setMode('commute');loadHereWx();loadShared();
+renderSaved();proUI();setMode('commute');loadHereWx();loadShared();greet();renderLog();
 setTimeout(()=>{
   if(typeof L==='undefined'){
     $('map').innerHTML='<div style="display:grid;place-items:center;height:100%;color:#5b6b87;font-size:13px;text-align:center;padding:20px">Map preview unavailable in this viewer —<br>everything works on the live site.</div>';
     $('radarBtn').style.display='none';
     return;
   }
-  if(!MAP){MAP=L.map('map').setView([39.5,-96],4);baseTiles().addTo(MAP);}
+  if(!MAP){MAP=L.map('map').setView([39.5,-96],4);BASE=baseTiles().addTo(MAP);}
 },50);
-function baseTiles(){return L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:20});}
+const BASES={
+  light:['Light','https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:20}],
+  dark:['Dark','https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:20}],
+  sat:['Satellite','https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri & partners',maxZoom:19}],
+  terrain:['Terrain','https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap © OpenTopoMap',maxZoom:17}]
+};
+let BASE=null, TR=null;
+function baseTiles(){const b=BASES[S.base]||BASES.light;return L.tileLayer(b[1],b[2]);}
+function setBase(k){ S.base=k; save(); if(!MAP)return; if(BASE)MAP.removeLayer(BASE); BASE=baseTiles().addTo(MAP); renderLayersPop(); }
+function setTrafficLayer(on){
+  if(!MAP)return;
+  if(TR){MAP.removeLayer(TR);TR=null;}
+  if(on&&S.tomtom){ TR=L.tileLayer('https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key='+S.tomtom+'&thickness=10',{opacity:.8,zIndex:7,maxZoom:20}).addTo(MAP); }
+  renderLayersPop();
+}
+function renderLayersPop(){
+  const p=$('layersPop'); if(!p)return;
+  p.innerHTML='<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Basemap</div>'+
+   Object.keys(BASES).map(k=>'<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer"><input type="radio" name="bm" value="'+k+'" '+(S.base===k?'checked':'')+'> '+BASES[k][0]+'</label>').join('')+
+   '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:10px 0 6px">Overlays</div>'+
+   '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer"><input type="checkbox" id="lyRadar" '+(RD.on?'checked':'')+'> 🌧 Radar</label>'+
+   (S.tomtom?'<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer"><input type="checkbox" id="lyTraffic" '+(TR?'checked':'')+'> 🚦 Live traffic</label>'
+            :'<div style="font-size:11.5px;color:var(--faint);padding:4px 0">🚦 Live traffic — add a TomTom key in ⚙</div>');
+  p.querySelectorAll('input[name=bm]').forEach(r=>r.onchange=()=>setBase(r.value));
+  const lr=$('lyRadar'); if(lr)lr.onchange=()=>$('radarBtn').click();
+  const lt=$('lyTraffic'); if(lt)lt.onchange=()=>setTrafficLayer(lt.checked);
+}
+$('layersBtn').onclick=()=>{const p=$('layersPop');const show=p.style.display==='none';p.style.display=show?'block':'none';if(show)renderLayersPop();};
+
+/* ---- resizable split ---- */
+document.documentElement.style.setProperty('--pw',(S.pw||420)+'px');
+document.documentElement.style.setProperty('--mh',(S.mh||38)+'vh');
+(function(){
+  const bar=$('dragbar'); if(!bar)return;
+  let drag=false;
+  bar.addEventListener('pointerdown',e=>{drag=true;bar.setPointerCapture(e.pointerId);});
+  bar.addEventListener('pointermove',e=>{
+    if(!drag)return;
+    const mobile=window.matchMedia('(max-width:860px)').matches;
+    if(mobile){
+      const h=58, vh=(e.clientY-h)/ (window.innerHeight-h)*100;
+      S.mh=Math.min(72,Math.max(18,vh));
+      document.documentElement.style.setProperty('--mh',S.mh+'vh');
+    }else{
+      S.pw=Math.min(window.innerWidth*0.62,Math.max(300,e.clientX));
+      document.documentElement.style.setProperty('--pw',S.pw+'px');
+    }
+  });
+  const end=()=>{ if(!drag)return; drag=false; save(); if(MAP)setTimeout(()=>MAP.invalidateSize(),60); };
+  bar.addEventListener('pointerup',end); bar.addEventListener('pointercancel',end);
+})();
+
+/* ---- personal: greeting + drive log ---- */
+function greet(){
+  const h=new Date().getHours();
+  const g=h<5?'Up early':h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  const n=S.name?', '+S.name:'';
+  $('idleHint').textContent=g+n+' — where to? Weather along your route, timed to when you\u2019ll actually be at each point.';
+}
+function renderLog(){
+  const L2=S.log||[];
+  if(!L2.length){$('logStats').textContent='';return;}
+  const mi=L2.reduce((a,x)=>a+x.mi,0), wet=L2.filter(x=>x.wet).length;
+  const d=S.units==='F'?Math.round(mi)+' mi':Math.round(mi*1.609)+' km';
+  $('logStats').textContent='📓 '+L2.length+' drive'+(L2.length>1?'s':'')+' logged · '+d+(wet?' · '+wet+' in rough weather 💪':'');
+}
+$('logBtn').onclick=()=>{
+  if(!LAST)return;
+  const sts=stopsAt(LAST.dep);
+  S.log.push({d:new Date().toISOString().slice(0,10),mi:LAST.route.distance/1609.34,min:Math.round(adjDuration(LAST.dep).secs/60),wet:Math.max(...sts.map(riskOf))>=1});
+  save(); renderLog(); toast('📓 Logged — safe travels!');
+};
+
+/* ---- near your destination (events / worth-a-stop) ---- */
+async function renderLocal(){
+  const el=$('localCard'); if(!el||!LAST)return;
+  const city=LAST.to.label.split(',')[0], la=LAST.to.lat, lo=LAST.to.lon;
+  el.innerHTML='<p>Looking around '+city+'…</p>';
+  if(S.tmkey){
+    try{
+      const j=await jget('https://app.ticketmaster.com/discovery/v2/events.json?apikey='+S.tmkey+'&latlong='+la.toFixed(4)+','+lo.toFixed(4)+'&radius=25&unit=miles&sort=date,asc&size=3');
+      const ev=(j._embedded&&j._embedded.events)||[];
+      if(ev.length){
+        el.innerHTML='<h3>🎟 Happening near '+city+'</h3>'+ev.map(e=>{
+          const d=e.dates&&e.dates.start? new Date(e.dates.start.localDate+'T'+(e.dates.start.localTime||'19:00')).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}):'';
+          const v=e._embedded&&e._embedded.venues&&e._embedded.venues[0]?e._embedded.venues[0].name:'';
+          return '<a class="aff" target="_blank" rel="noopener" href="'+e.url+'">'+d+' · '+e.name+(v?' — '+v:'')+' →</a>';
+        }).join('');
+        return;
+      }
+    }catch(e){}
+  }
+  try{
+    const j=await jget('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+la.toFixed(4)+'%7C'+lo.toFixed(4)+'&gsradius=10000&gslimit=6&format=json&origin=*');
+    const pl=(j.query&&j.query.geosearch||[]).filter(p=>!/^List of|^National Register/i.test(p.title)).slice(0,3);
+    el.innerHTML='<h3>📍 Worth a stop near '+city+'</h3>'+
+      pl.map(p=>'<a class="aff" target="_blank" rel="noopener" href="https://en.wikipedia.org/wiki/'+encodeURIComponent(p.title.replace(/ /g,'_'))+'">'+p.title+' →</a>').join('')+
+      '<a class="aff" target="_blank" rel="noopener" href="https://www.google.com/search?q='+encodeURIComponent('events in '+city+' this weekend')+'">🎉 Events in '+city+' this weekend →</a>'+
+      '<p style="margin-top:8px;font-size:11.5px">Want real event listings here automatically? Add a free Ticketmaster key in ⚙ Settings.</p>';
+  }catch(e){
+    el.innerHTML='<h3>📍 '+city+'</h3><a class="aff" target="_blank" rel="noopener" href="https://www.google.com/search?q='+encodeURIComponent('things to do in '+city)+'">🎉 Things to do in '+city+' →</a>';
+  }
+}
+
+/* ---- map ---- */
 
 </script>
 </body>
