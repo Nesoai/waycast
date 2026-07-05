@@ -49,7 +49,10 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
 #map{height:100%;z-index:1;background:#dfe8ee}
 #mapwrap{height:100%}
 @media(max-width:860px){
-  #app{grid-template-columns:1fr;grid-template-rows:var(--mh,38vh) 10px 1fr}
+  body{height:auto;min-height:100dvh;overflow-y:auto;position:static}
+  header{position:sticky;top:0}
+  #app{grid-template-columns:1fr;grid-template-rows:var(--mh,38vh) 10px auto;height:auto}
+  #panel{overflow:visible;height:auto;padding-bottom:80px}
   #mapwrap{order:-2}
   #dragbar{order:-1;cursor:row-resize;border:none;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
   #dragbar i{width:44px;height:3px}
@@ -189,7 +192,7 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
     </div>
 
     <div class="frow"><label>From</label>
-      <input class="tin" id="fromIn" placeholder="Home, address, or city…" autocomplete="off">
+      <input class="tin" id="fromIn" placeholder="Home, address, or city…" autocomplete="off" enterkeyhint="go">
       <button class="locbtn" id="locBtn" title="Use my location">📍</button>
     </div>
     <div id="stopsBox"></div>
@@ -249,7 +252,7 @@ header:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
       </div>
     </div>
 
-    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.4<br>
+    <div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.5<br>
     Forecasts are estimates — always drive to conditions. Map © OpenStreetMap contributors · routing OSRM · weather Open-Meteo.</div>
   </div>
   <div id="dragbar" title="Drag to resize"><i></i></div>
@@ -429,6 +432,9 @@ setNow();
 
 /* ---- main cast ---- */
 $('goBtn').onclick=()=>cast();
+['fromIn','toIn','whenIn'].forEach(id=>$(id).addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); cast(); }
+}));
 async function cast(){
   err('');
   const fq=$('fromIn').value.trim(),tq=$('toIn').value.trim();
@@ -630,9 +636,11 @@ function renderFuel(){
 
 /* ---- RainViewer radar overlay ---- */
 let RD={on:false,frames:[],layers:[],i:0,timer:null};
+function radarWanted(){return S.radar!==false;}
 $('radarBtn').onclick=async()=>{
   if(typeof L==='undefined'||!MAP)return;
-  if(RD.on){ radarOff(); return; }
+  if(RD.on){ S.radar=false; save(); radarOff(); return; }
+  S.radar=true; save();
   try{
     $('radarBtn').textContent='🌧 …';
     if(!RD.frames.length){
@@ -772,7 +780,7 @@ $('setBtn').onclick=()=>{
     <p style="margin-top:2px">Optional: a free TomTom developer key adds true live-traffic drive times. Without it, WayCast models typical rush-hour patterns.</p>
     <div class="setrow">Pro status <span style="margin-left:auto;color:${S.pro?'var(--ok)':'var(--faint)'};font-weight:700">${S.pro?'✓ Active':'Not active'}</span></div>
     <button class="lockbtn" id="ttSave" style="background:var(--a1);color:#04211d">Save settings</button>
-    <div class="brandfoot">WayCast v1.4 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
+    <div class="brandfoot">WayCast v1.5 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
   $('uF').onclick=()=>{S.units='F';$('uF').classList.add('on');$('uC').classList.remove('on');};
   $('uC').onclick=()=>{S.units='C';$('uC').classList.add('on');$('uF').classList.remove('on');};
   $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();S.tmkey=$('tmIn').value.trim();S.name=$('nameIn2').value.trim();greet();renderLog();setTrafficLayer(false);save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
@@ -790,6 +798,7 @@ setTimeout(()=>{
   }
   if(!MAP){MAP=L.map('map').setView([39.5,-96],4);BASE=baseTiles().addTo(MAP);}
   centerHome();
+  if(radarWanted())setTimeout(()=>$('radarBtn').click(),400);
 },50);
 const BASES={
   light:['Light','https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:20}],
