@@ -257,14 +257,15 @@ if(GA_ID){const s=document.createElement('script');s.async=true;s.src='https://w
       <div class="secl" id="upsellLbl">WayCast Pro</div>
       <div class="locknote" id="upsell">
         <b>Unlock the full trip toolkit.</b> Multi-stop road trips with rest-break timing, unlimited saved commutes, and printable trip sheets — one small one-time unlock, yours forever.
-        <br><a class="lockbtn" id="buyBtn" href="#" target="_blank" rel="noopener">Get Pro →</a>
+        <br><a class="lockbtn" id="buyBtn" href="#" target="_blank" rel="noopener">Request Pro →</a>
         <button class="lockbtn" id="codeBtn" style="background:var(--card);color:var(--dim);border:1px solid var(--line)">I have a code</button>
       </div>
     </div>
 
     <details class="softcard" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;font-size:13.5px;list-style:none">🧭 Why WayCast — isn't this just Google Maps?</summary>
 <p style="font-size:12.5px;color:var(--dim);margin:10px 0 0;line-height:1.6">Maps answers <b>"how do I get there?"</b> — turn-by-turn while you drive. WayCast answers <b>"should I leave now, and what am I driving into?"</b> — the forecast at five points along your route <i>at the moment you'll be at each one</i>, the best departure window scored by rain and traffic, sunset and glare warnings, what to wear and pack, and what the fuel run costs. Do your ten minutes here, then let any nav app do the driving.</p></details>
-<div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.7<br>
+<div style="margin-top:12px;font-size:12.5px"><a href="mailto:boundless.mbf@gmail.com?subject=WayCast%20idea%20%F0%9F%92%A1&body=My%20idea%20to%20make%20WayCast%20better%3A" style="font-weight:600">💡 What should WayCast add next? Tell us →</a></div>
+<div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.8<br>
     Forecasts are estimates — always drive to conditions. Map © OpenStreetMap contributors · routing OSRM · weather Open-Meteo.</div>
   </div>
   <div id="dragbar" title="Drag to resize"><i></i></div>
@@ -284,7 +285,7 @@ if(GA_ID){const s=document.createElement('script');s.async=true;s.src='https://w
 
 <script>
 /* ================= WAYCAST v1.0 — config (Mallory edits these) ================= */
-const BUY_URL   = "#";  // ← paste your Gumroad / Stripe payment link for the Pro unlock
+const BUY_URL   = "mailto:boundless.mbf@gmail.com?subject=Requesting%20WayCast%20Pro%20%28%249%29&body=Hi%20Boundless%20%E2%80%94%20I%20would%20like%20WayCast%20Pro.%20Please%20send%20my%20unlock%20code%20and%20how%20to%20pay.";  // ← swap for the Gumroad link when live
 const PRICE_TXT = "$9 one-time";
 const AFF_STAY  = "https://www.booking.com/searchresults.html?ss={CITY}";  // ← add your affiliate ?aid=XXXX
 const AFF_LABEL = "🏨 Find a place to stay near {CITY} →";
@@ -765,7 +766,7 @@ function openPro(msg){
       <li>Unlimited saved commutes</li>
       <li>Printable / exportable trip sheets</li>
     </ul>
-    <a class="lockbtn" href="${BUY_URL}" target="_blank" rel="noopener">Get Pro — ${PRICE_TXT} →</a>
+    <a class="lockbtn" href="${BUY_URL}" target="_blank" rel="noopener">Request Pro — ${PRICE_TXT} →</a>
     <div class="setrow" style="margin-top:14px">Unlock code <input class="tin" id="codeIn" placeholder="WAY-XXXX-XXXX"></div>
     <button class="lockbtn" id="applyCode" style="background:var(--a1);color:#04211d">Apply code</button>`);
   $('applyCode').onclick=()=>{
@@ -792,7 +793,7 @@ $('setBtn').onclick=()=>{
     <p style="margin-top:2px">Optional: a free TomTom developer key adds true live-traffic drive times. Without it, WayCast models typical rush-hour patterns.</p>
     <div class="setrow">Pro status <span style="margin-left:auto;color:${S.pro?'var(--ok)':'var(--faint)'};font-weight:700">${S.pro?'✓ Active':'Not active'}</span></div>
     <button class="lockbtn" id="ttSave" style="background:var(--a1);color:#04211d">Save settings</button>
-    <div class="brandfoot">WayCast v1.7 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
+    <div class="brandfoot">WayCast v1.8 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
   $('uF').onclick=()=>{S.units='F';$('uF').classList.add('on');$('uC').classList.remove('on');};
   $('uC').onclick=()=>{S.units='C';$('uC').classList.add('on');$('uF').classList.remove('on');};
   $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();S.tmkey=$('tmIn').value.trim();S.name=$('nameIn2').value.trim();greet();renderLog();setTrafficLayer(false);save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
