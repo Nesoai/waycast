@@ -265,7 +265,7 @@ if(GA_ID){const s=document.createElement('script');s.async=true;s.src='https://w
     <details class="softcard" style="margin-top:16px"><summary style="cursor:pointer;font-weight:700;font-size:13.5px;list-style:none">🧭 Why WayCast — isn't this just Google Maps?</summary>
 <p style="font-size:12.5px;color:var(--dim);margin:10px 0 0;line-height:1.6">Maps answers <b>"how do I get there?"</b> — turn-by-turn while you drive. WayCast answers <b>"should I leave now, and what am I driving into?"</b> — the forecast at five points along your route <i>at the moment you'll be at each one</i>, the best departure window scored by rain and traffic, sunset and glare warnings, what to wear and pack, and what the fuel run costs. Do your ten minutes here, then let any nav app do the driving.</p></details>
 <div style="margin-top:12px;font-size:12.5px"><a href="mailto:boundless.mbf@gmail.com?subject=WayCast%20idea%20%F0%9F%92%A1&body=My%20idea%20to%20make%20WayCast%20better%3A" style="font-weight:600">💡 What should WayCast add next? Tell us →</a></div>
-<div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v1.9 · © 2026 Boundless / Mallory Bailey-Finkley — all rights reserved<br>
+<div class="brandfoot">WayCast · a <a href="https://nesoai.github.io/mallory/" target="_blank" rel="noopener">Boundless</a> tool · v2.0 · © 2026 Boundless / Mallory Bailey-Finkley — all rights reserved<br>
     Forecasts are estimates — always drive to conditions. Map © OpenStreetMap contributors · routing OSRM · weather Open-Meteo.</div>
   </div>
   <div id="dragbar" title="Drag to resize"><i></i></div>
@@ -662,6 +662,7 @@ $('radarBtn').onclick=async()=>{
     }
     if(!RD.frames.length)throw new Error();
     RD.layers=RD.frames.map(f=>L.tileLayer('https://tilecache.rainviewer.com'+f.path+'/256/{z}/{x}/{y}/2/1_1.png',{opacity:0,zIndex:8,maxNativeZoom:9,maxZoom:20}).addTo(MAP));
+    applyRadarZoomCap();
     RD.on=true; RD.i=0;
     const step=()=>{
       RD.layers.forEach((l,k)=>l.setOpacity(k===RD.i?0.65:0));
@@ -672,10 +673,15 @@ $('radarBtn').onclick=async()=>{
     step(); RD.timer=setInterval(step,700);
   }catch(e){ $('radarBtn').textContent='🌧 Radar'; toast('Radar unavailable right now'); }
 };
+function applyRadarZoomCap(){
+  if(!MAP)return;
+  if(RD.on&&S.rzcap!==false){ MAP.setMaxZoom(10); if(MAP.getZoom()>10)MAP.setZoom(10); }
+  else MAP.setMaxZoom(20);
+}
 function radarOff(){
   if(RD.timer)clearInterval(RD.timer); RD.timer=null;
   RD.layers.forEach(l=>{try{MAP.removeLayer(l)}catch(e){}}); RD.layers=[];
-  RD.on=false; $('radarBtn').textContent='🌧 Radar';
+  RD.on=false; $('radarBtn').textContent='🌧 Radar'; applyRadarZoomCap();
 }
 
 /* ---- share a trip ---- */
@@ -793,7 +799,7 @@ $('setBtn').onclick=()=>{
     <p style="margin-top:2px">Optional: a free TomTom developer key adds true live-traffic drive times. Without it, WayCast models typical rush-hour patterns.</p>
     <div class="setrow">Pro status <span style="margin-left:auto;color:${S.pro?'var(--ok)':'var(--faint)'};font-weight:700">${S.pro?'✓ Active':'Not active'}</span></div>
     <button class="lockbtn" id="ttSave" style="background:var(--a1);color:#04211d">Save settings</button>
-    <div class="brandfoot">WayCast v1.9 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
+    <div class="brandfoot">WayCast v2.0 · maps © OpenStreetMap · routing OSRM · weather Open-Meteo · a Boundless tool</div>`);
   $('uF').onclick=()=>{S.units='F';$('uF').classList.add('on');$('uC').classList.remove('on');};
   $('uC').onclick=()=>{S.units='C';$('uC').classList.add('on');$('uF').classList.remove('on');};
   $('ttSave').onclick=()=>{S.tomtom=$('ttIn').value.trim();S.tmkey=$('tmIn').value.trim();S.name=$('nameIn2').value.trim();greet();renderLog();setTrafficLayer(false);save();$('unitBtn').textContent='°'+S.units;closeModal();toast('Settings saved');if(LAST)renderAll();};
@@ -834,10 +840,12 @@ function renderLayersPop(){
    Object.keys(BASES).map(k=>'<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer"><input type="radio" name="bm" value="'+k+'" '+(S.base===k?'checked':'')+'> '+BASES[k][0]+'</label>').join('')+
    '<div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:10px 0 6px">Overlays</div>'+
    '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer"><input type="checkbox" id="lyRadar" '+(RD.on?'checked':'')+'> 🌧 Radar</label>'+
+   (RD.on?'<label style="display:flex;gap:8px;align-items:center;font-size:12px;padding:2px 0 4px 22px;cursor:pointer;color:var(--dim)"><input type="checkbox" id="lyRZ" '+(S.rzcap!==false?'checked':'')+'> Cap zoom while radar is on (keeps radar crisp)</label>':'')+
    (S.tomtom?'<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:4px 0;cursor:pointer"><input type="checkbox" id="lyTraffic" '+(TR?'checked':'')+'> 🚦 Live traffic</label>'
             :'<div style="font-size:11.5px;color:var(--faint);padding:4px 0">🚦 Live traffic — add a TomTom key in ⚙</div>');
   p.querySelectorAll('input[name=bm]').forEach(r=>r.onchange=()=>setBase(r.value));
   const lr=$('lyRadar'); if(lr)lr.onchange=()=>$('radarBtn').click();
+  const lz=$('lyRZ'); if(lz)lz.onchange=()=>{S.rzcap=lz.checked;save();applyRadarZoomCap();};
   const lt=$('lyTraffic'); if(lt)lt.onchange=()=>setTrafficLayer(lt.checked);
 }
 $('layersBtn').onclick=()=>{const p=$('layersPop');const show=p.style.display==='none';p.style.display=show?'block':'none';if(show)renderLayersPop();};
